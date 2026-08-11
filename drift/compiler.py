@@ -93,3 +93,59 @@ def _validate_inputs(node: TemplateNode, known_keys: set[str]) -> None:
 
 def _resolve_operation(node: TemplateNode, parameters: Mapping[str, JsonValue]) -> dict:
     """Apply allow-listed parameter bindings, then freeze.
+
+    Only keys named in `parameter_bindings` may be written, and only from the
+    revision's `parameters` map. That restriction bounds the blast radius of an
+    edit: a parameter can only invalidate the nodes that declare the binding.
+    """
+    operation = dict(node.operation)
+    for binding in node.parameter_bindings:
+        if binding.parameter not in parameters:
+            raise GraphCompilationError(
+                f"node {node.stable_key!r} binds parameter {binding.parameter!r}, "
+                "which the project revision does not define"
+            )
+        operation[binding.operation_key] = parameters[binding.parameter]
+    canonical_payload(operation)  # fail loudly now, not at fingerprint time
+    return operation
+
+
+def topological_order(nodes: list[CompiledNode]) -> tuple[str, ...]:
+    """Kahn's algorithm, proving acyclicity and yielding a deterministic order."""
+    indegree = {node.stable_key: 0 for node in nodes}
+    dependents: dict[str, list[str]] = {node.stable_key: [] for node in nodes}
+
+    for node in nodes:
+        for upstream in sorted({slot.from_key for slot in node.inputs}):
+            indegree[node.stable_key] += 1
+            dependents[upstream].append(node.stable_key)
+
+    ready = deque(sorted(key for key, degree in indegree.items() if degree == 0))
+    order: list[str] = []
+    while ready:
+        key = ready.popleft()
+        order.append(key)
+        newly_ready: list[str] = []
+        for dependent in dependents[key]:
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                newly_ready.append(dependent)
+        for dependent in sorted(newly_ready):
+            ready.append(dependent)
+        ready = deque(sorted(ready))
+
+    if len(order) != len(nodes):
+        unresolved = sorted(set(indegree) - set(order))
+        raise GraphCompilationError(f"graph contains a cycle among nodes: {', '.join(unresolved)}")
+    return tuple(order)
+
+
+def _graph_hash(template: GraphTemplate, nodes: list[CompiledNode]) -> str:
+    return canonical_hash(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "compiler_version": COMPILER_VERSION,
+            "template_key": template.key,
+            "template_version": template.version,
+            "nodes": [
+                {"stable_key": node.stable_key, "spec_hash": node.spec_hash}
