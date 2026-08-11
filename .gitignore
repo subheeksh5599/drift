@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Drift runtime state (per-project build cache) and generated outputs
+.drift/
+out/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
