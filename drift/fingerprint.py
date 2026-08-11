@@ -53,3 +53,24 @@ def compute_fingerprint(
     ]
     payload = {
         "schema_version": SCHEMA_VERSION,
+        "node_type": str(node.node_type),
+        "operation": node.operation,
+        "ordered_inputs": ordered_inputs,
+        "template_version": template_version,
+    }
+    return canonical_hash(canonical_payload(payload))
+
+
+def compute_source_fingerprint(node: CompiledNode, *, content_hash: str) -> str:
+    """A source has no upstream inputs, so its identity is the verified content
+    it carries. `content_hash` must come from bytes the system hashed itself —
+    never a client-supplied claim."""
+    return canonical_hash(
+        {
+            "schema_version": SCHEMA_VERSION,
+            "node_type": str(node.node_type),
+            "stable_key": node.stable_key,
+            "content_hash": content_hash,
+            "operation": node.operation,
+        }
+    )
