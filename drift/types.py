@@ -53,3 +53,34 @@ class CompiledNode:
 
 
 @dataclass(frozen=True)
+class GraphTemplate:
+    key: str
+    version: int
+    nodes: tuple[TemplateNode, ...]
+
+
+@dataclass(frozen=True)
+class CompiledGraph:
+    template_key: str
+    template_version: int
+    nodes: tuple[CompiledNode, ...]
+    topological_order: tuple[str, ...]
+    canonical_hash: str
+
+    @property
+    def by_key(self) -> dict[str, CompiledNode]:
+        return {node.stable_key: node for node in self.nodes}
+
+
+def node_spec_hash(stable_key: str, node_type: NodeType, inputs: tuple[InputSlot, ...], operation: dict) -> str:
+    """Hash of a node's own specification, independent of upstream output values."""
+    return canonical_hash(
+        {
+            "stable_key": stable_key,
+            "node_type": str(node_type),
+            "inputs": [
+                {"slot": s.slot, "from": s.from_key, "ordinal": s.ordinal} for s in inputs
+            ],
+            "operation": operation,
+        }
+    )
