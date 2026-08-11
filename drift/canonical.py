@@ -87,3 +87,21 @@ def canonical_payload(value: JsonValue) -> JsonValue:
 
     def check(node: JsonValue, path: str) -> None:
         if node is None or isinstance(node, (bool, int, str)):
+            return
+        if isinstance(node, float):
+            raise CanonicalizationError(
+                f"float at {path or '<root>'} is not permitted in a hashed payload; "
+                "carry decimals as strings"
+            )
+        if isinstance(node, list):
+            for index, item in enumerate(node):
+                check(item, f"{path}[{index}]")
+            return
+        if isinstance(node, dict):
+            for key, item in node.items():
+                check(item, f"{path}.{key}" if path else key)
+            return
+        raise CanonicalizationError(f"type at {path or '<root>'} is not JSON: {type(node).__name__}")
+
+    check(value, "")
+    return value
