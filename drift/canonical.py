@@ -43,3 +43,47 @@ def _serialize_number(value: int | float) -> str:
     if value.is_integer() and abs(value) < 1e21:
         return str(int(value))
     return repr(value)
+
+
+def _utf16_sort_key(key: str) -> bytes:
+    # JCS sorts keys by UTF-16 code unit, which differs from Python's code-point
+    # ordering above the BMP. UTF-16BE bytes reproduce it exactly.
+    return key.encode("utf-16-be")
+
+
+def _serialize(value: JsonValue) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return _serialize_number(value)
+    if isinstance(value, str):
+        return _serialize_string(value)
+    if isinstance(value, list):
+        return "[" + ",".join(_serialize(item) for item in value) + "]"
+    if isinstance(value, dict):
+        parts = []
+        for key in sorted(value, key=_utf16_sort_key):
+            if not isinstance(key, str):
+                raise CanonicalizationError("object keys must be strings")
+            parts.append(f"{_serialize_string(key)}:{_serialize(value[key])}")
+        return "{" + ",".join(parts) + "}"
+    raise CanonicalizationError(f"type is not canonicalizable: {type(value).__name__}")
+
+
+def canonical_json(value: JsonValue) -> str:
+    """Canonicalize to a JCS string. Deterministic for equal inputs by construction."""
+    return _serialize(value)
+
+
+def canonical_hash(value: JsonValue) -> str:
+    """SHA-256 hex of the canonical form. This is what fingerprints and plan hashes are."""
+    return hashlib.sha256(_serialize(value).encode("utf-8")).hexdigest()
+
+
+def canonical_payload(value: JsonValue) -> JsonValue:
+    """Reject floats so a hash can never depend on binary rounding."""
+
+    def check(node: JsonValue, path: str) -> None:
+        if node is None or isinstance(node, (bool, int, str)):
