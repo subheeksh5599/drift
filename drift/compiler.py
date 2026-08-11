@@ -149,3 +149,7 @@ def _graph_hash(template: GraphTemplate, nodes: list[CompiledNode]) -> str:
             "template_version": template.version,
             "nodes": [
                 {"stable_key": node.stable_key, "spec_hash": node.spec_hash}
+                for node in sorted(nodes, key=lambda n: n.stable_key)
+            ],
+        }
+    )
