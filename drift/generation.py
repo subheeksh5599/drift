@@ -73,3 +73,39 @@ def render_node(node: CompiledNode, inputs: dict[str, str]) -> str:
 
 
 def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def _extract_hashtags(text: str, limit: int) -> str:
+    seen: set[str] = set()
+    tags: list[str] = []
+    for word in _WORD.findall(text):
+        base = word.lower()
+        if base in _STOPWORDS or base in seen:
+            continue
+        seen.add(base)
+        tags.append("#" + base.capitalize())
+        if len(tags) >= limit:
+            break
+    return " ".join(tags)
+
+
+def _substitute(template: str, context: dict[str, str]) -> str:
+    missing: set[str] = set()
+
+    def repl(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in context:
+            missing.add(key)
+            return match.group(0)
+        return context[key]
+
+    result = _PLACEHOLDER.sub(repl, template)
+    if missing:
+        raise GenerationError(
+            f"unresolved placeholders in template: {', '.join(sorted(missing))}"
+        )
+    return result
