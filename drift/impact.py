@@ -110,3 +110,51 @@ def compute_impact(
 
     for stable_key in graph.topological_order:
         node = by_key[stable_key]
+        candidate = base_states.get(stable_key)
+
+        if node.node_type.is_source:
+            content_hash = source_content_hashes.get(stable_key)
+            if content_hash is None:
+                raise ValueError(
+                    f"source node {stable_key!r} has no content hash; a source must be "
+                    "hashed before impact can be computed"
+                )
+            proposed = compute_source_fingerprint(node, content_hash=content_hash)
+        else:
+            proposed = compute_fingerprint(node, input_refs=output_refs, template_version=template_version)
+
+        old_fingerprint = candidate.fingerprint if candidate else None
+        rejection = evaluate_reuse_proof(proposed_fingerprint=proposed, candidate=candidate)
+
+        if rejection is None:
+            output_refs[stable_key] = candidate.output_hash
+            impacts.append(
+                NodeImpact(
+                    stable_key=stable_key,
+                    decision=ImpactDecision.REUSE,
+                    reason_code=ReasonCode.EXACT_VALIDATED_REUSE,
+                    reason="Recipe, inputs and stored bytes are all unchanged.",
+                    old_fingerprint=old_fingerprint,
+                    new_fingerprint=proposed,
+                )
+            )
+            continue
+
+        if stable_key in blocked_keys:
+            output_refs[stable_key] = None
+            impacts.append(
+                NodeImpact(
+                    stable_key=stable_key,
+                    decision=ImpactDecision.BLOCKED,
+                    reason_code=ReasonCode.CONFIGURATION_BLOCKED,
+                    reason=blocked_keys[stable_key],
+                    old_fingerprint=old_fingerprint,
+                    new_fingerprint=proposed,
+                )
+            )
+            continue
+
+        reason_code, reason = _refine_rebuild_reason(
+            stable_key=stable_key,
+            rejection_code=rejection,
+            node=node,
