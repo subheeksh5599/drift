@@ -158,3 +158,90 @@ def compute_impact(
             stable_key=stable_key,
             rejection_code=rejection,
             node=node,
+            graph=graph,
+            output_refs=output_refs,
+            base_states=base_states,
+        )
+
+        output_refs[stable_key] = pending_output_ref(proposed)
+        impacts.append(
+            NodeImpact(
+                stable_key=stable_key,
+                decision=ImpactDecision.REBUILD,
+                reason_code=reason_code,
+                reason=reason,
+                old_fingerprint=old_fingerprint,
+                new_fingerprint=proposed,
+            )
+        )
+
+    nodes = tuple(impacts)
+    plan = ImpactPlan(graph_hash=graph.canonical_hash, nodes=nodes, plan_hash="")
+    return ImpactPlan(graph_hash=graph.canonical_hash, nodes=nodes, plan_hash=_plan_hash(plan))
+
+
+def _refine_rebuild_reason(
+    *,
+    stable_key: str,
+    rejection_code: ReasonCode,
+    node,
+    graph: CompiledGraph,
+    output_refs: Mapping[str, str | None],
+    base_states: Mapping[str, NodeCacheState],
+) -> tuple[ReasonCode, str]:
+    """Distinguish "this node's own recipe changed" from "something upstream did".
+
+    Both surface as a fingerprint mismatch, but they are different stories to a
+    user. If any upstream node is rebuilding in this same plan, the cause is
+    upstream; otherwise the node's own spec or source content moved.
+    """
+    if rejection_code is not ReasonCode.NODE_SPEC_CHANGED:
+        return rejection_code, _generic_reason(rejection_code)
+
+    changed_upstream = sorted(
+        {
+            slot.from_key
+            for slot in node.inputs
+            if (ref := output_refs.get(slot.from_key)) is not None and ref.startswith("pending:")
+        }
+    )
+    if changed_upstream:
+        return (
+            ReasonCode.UPSTREAM_FINGERPRINT_CHANGED,
+            f"{', '.join(changed_upstream)} will be rebuilt, so this node's input changes.",
+        )
+
+    if node.node_type.is_source:
+        return ReasonCode.SOURCE_CONTENT_CHANGED, "The source content changed."
+
+    if stable_key not in base_states:
+        return ReasonCode.NODE_ADDED, "This node is new in the proposed graph."
+
+    return ReasonCode.NODE_SPEC_CHANGED, "This node's own specification changed."
+
+
+def _generic_reason(code: ReasonCode) -> str:
+    return {
+        ReasonCode.CACHE_MISS: "No previous build produced this node.",
+        ReasonCode.MANUAL_INVALIDATION: "This output was manually invalidated.",
+        ReasonCode.CACHE_ASSET_MISSING: "The previous build node has no stored output.",
+        ReasonCode.CACHE_ASSET_UNVERIFIED: "Stored bytes no longer match the recorded hash.",
+    }.get(code, code.value)
+
+
+def _plan_hash(plan: ImpactPlan) -> str:
+    return canonical_hash(
+        {
+            "graph_hash": plan.graph_hash,
+            "nodes": [
+                {
+                    "stable_key": n.stable_key,
+                    "decision": str(n.decision),
+                    "reason_code": str(n.reason_code),
+                    "new_fingerprint": n.new_fingerprint,
+                    "old_fingerprint": n.old_fingerprint,
+                }
+                for n in plan.nodes
+            ],
+        }
+    )
