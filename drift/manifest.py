@@ -68,3 +68,35 @@ def write_manifest(
 
 
 def verify(state_dir: Path, build_id: str | None = None) -> tuple[bool, list[str]]:
+    """Re-hash every asset and the manifest. Returns (ok, failures)."""
+    builds_dir = state_dir / "builds"
+
+    if build_id is not None:
+        path = builds_dir / f"{build_id}.json"
+    else:
+        manifests = sorted(builds_dir.glob("*.json"))
+        if not manifests:
+            return False, ["no builds found"]
+        path = manifests[-1]
+
+    if not path.exists():
+        return False, [f"manifest not found: {path}"]
+
+    payload = json.loads(path.read_text())
+    failures: list[str] = []
+
+    recomputed = _manifest_hash(payload)
+    if recomputed != payload.get("manifest_hash"):
+        failures.append("manifest_hash mismatch (the manifest itself was edited)")
+
+    content_dir = state_dir.parent
+    for asset in payload["assets"]:
+        file = content_dir / asset["path"]
+        if not file.exists():
+            failures.append(f"{asset['stable_key']}: file missing ({asset['path']})")
+            continue
+        digest = _hash_bytes(file.read_bytes())
+        if digest != asset["output_hash"]:
+            failures.append(f"{asset['stable_key']}: hash mismatch ({asset['path']})")
+
+    return (len(failures) == 0, failures)
