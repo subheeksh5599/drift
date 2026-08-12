@@ -88,3 +88,7 @@ CREATOR_TEMPLATE = GraphTemplate(
             "post.linkedin", "LinkedIn post",
             [InputSlot("caption", "caption.linkedin"), InputSlot("tags", "tags")],
             operation={"platform": "linkedin", "template": "{caption}\n\n{tags} {handle}"},
+            bindings=(ParameterBinding("handle", PARAM_HANDLE),),
+        ),
+    ),
+)
