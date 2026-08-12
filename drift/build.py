@@ -29,3 +29,93 @@ def _hash_bytes(b: bytes) -> str:
 
 def load_sources(content_dir: Path) -> tuple[dict[str, str], dict[str, str]]:
     """Return (source_content_hashes, source_texts) for every source file.
+
+    Raises FileNotFoundError if a declared source file is missing — a missing
+    source must fail loudly, not silently hash nothing.
+    """
+    hashes: dict[str, str] = {}
+    texts: dict[str, str] = {}
+    for stable_key, filename in SOURCE_FILES.items():
+        path = content_dir / filename
+        if not path.exists():
+            raise FileNotFoundError(f"missing source file: {path}")
+        data = path.read_bytes()
+        hashes[stable_key] = _hash_bytes(data)
+        texts[stable_key] = data.decode("utf-8")
+    return hashes, texts
+
+
+@dataclass(frozen=True)
+class BuildResult:
+    build_id: str
+    summary: str
+    rebuild: tuple[str, ...]
+    reuse: tuple[str, ...]
+    plan_hash: str
+    manifest_path: Path
+
+
+def build(content_dir: Path, handle: str) -> BuildResult:
+    source_hashes, source_texts = load_sources(content_dir)
+    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: handle})
+
+    state_dir = content_dir / ".drift"
+    base = load_state(state_dir)
+    plan = compute_impact(graph, base_states=base, source_content_hashes=source_hashes)
+
+    out_dir = content_dir / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    decision = {n.stable_key: n.decision for n in plan.nodes}
+
+    # Generate in topological order, keeping the real output text and hash per node.
+    resolved: dict[str, str] = {}
+    output_hashes: dict[str, str] = {}
+    for key in graph.topological_order:
+        node = graph.by_key[key]
+        if node.node_type.is_source:
+            resolved[key] = source_texts[key]
+            output_hashes[key] = source_hashes[key]
+            continue
+
+        out_path = out_dir / f"{key}.txt"
+        if decision.get(key) is ImpactDecision.REUSE and out_path.exists():
+            text = out_path.read_text()
+            resolved[key] = text
+            output_hashes[key] = _hash_bytes(text.encode("utf-8"))
+            continue
+
+        # Rebuild (or reuse whose output file went missing — regenerate defensively).
+        text = render_node(node, resolved)
+        out_path.write_text(text)
+        resolved[key] = text
+        output_hashes[key] = _hash_bytes(text.encode("utf-8"))
+
+    # Record post-build reality: real fingerprints from real output hashes.
+    state: dict[str, NodeCacheState] = {}
+    for key in graph.topological_order:
+        node = graph.by_key[key]
+        if node.node_type.is_source:
+            fp = compute_source_fingerprint(node, content_hash=source_hashes[key])
+        else:
+            fp = compute_fingerprint(
+                node, input_refs=output_hashes, template_version=graph.template_version
+            )
+        state[key] = NodeCacheState(
+            fingerprint=fp,
+            output_hash=output_hashes[key],
+            assets_present=True,
+        )
+    save_state(state_dir, state)
+
+    build_id = uuid.uuid4().hex[:12]
+    manifest_path = write_manifest(state_dir, build_id, graph, plan, output_hashes)
+
+    return BuildResult(
+        build_id=build_id,
+        summary=plan.summary(),
+        rebuild=plan.rebuild_keys,
+        reuse=plan.reuse_keys,
+        plan_hash=plan.plan_hash,
+        manifest_path=manifest_path,
+    )
