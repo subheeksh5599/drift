@@ -28,3 +28,21 @@ def test_plan_build_verify_end_to_end(tmp_path):
 def test_handle_edit_via_cli(tmp_path):
     d = _brief(tmp_path)
     _run("build", str(d))
+    r = _run("build", str(d), "--handle", "@newhandle")
+    assert r.returncode == 0
+    assert "2 rebuild / 7 reuse" in r.stdout
+
+
+def test_report_prints_provenance(tmp_path):
+    d = _brief(tmp_path)
+    _run("build", str(d))
+    r = _run("report", str(d))
+    assert r.returncode == 0
+    assert "source.brief" in r.stdout
+    assert "fingerprint" in r.stdout
+
+
+def test_missing_source_reports_error(tmp_path):
+    r = _run("build", str(tmp_path))  # no brief.txt
+    assert r.returncode == 1
+    assert "error:" in r.stderr
