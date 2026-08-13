@@ -38,3 +38,23 @@ def _print_plan(plan) -> None:
 
 
 def cmd_plan(content_dir: Path, handle: str) -> int:
+    source_hashes, _ = load_sources(content_dir)
+    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: handle})
+    base = load_state(content_dir / ".drift")
+    plan = compute_impact(graph, base_states=base, source_content_hashes=source_hashes)
+    print(f"template: {graph.template_key} v{graph.template_version}")
+    _print_plan(plan)
+    return 0
+
+
+def cmd_build(content_dir: Path, handle: str) -> int:
+    result = build(content_dir, handle)
+    print(f"build {result.build_id}: {result.summary}")
+    print(f"manifest:  {result.manifest_path}")
+    print()
+    for key in result.rebuild:
+        print(f"  rebuilt  {key}")
+    for key in result.reuse:
+        print(f"  reused   {key}")
+    return 0
+
