@@ -33,3 +33,38 @@ def _build_base(graph, source_hashes):
             out = _sha(fp)
             output_refs[key] = out
             state[key] = NodeCacheState(fingerprint=fp, output_hash=out, assets_present=True)
+    return state
+
+
+BRIEF_A = "Launch a hydration brand. Dark graphite set, crisp white bottle."
+BRIEF_B = "Launch a hydration brand. Dark graphite set, crisp white bottle. New packaging."
+
+
+def test_compile_is_deterministic():
+    g1 = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    g2 = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    assert g1.canonical_hash == g2.canonical_hash
+    assert len(g1.nodes) == 9
+    assert g1.topological_order[0] == "source.brief"
+
+
+def test_no_change_is_all_reuse():
+    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    source_hashes = {"source.brief": _sha(BRIEF_A)}
+    base = _build_base(graph, source_hashes)
+    plan = compute_impact(graph, base_states=base, source_content_hashes=source_hashes)
+    assert plan.summary() == "0 rebuild / 9 reuse / 0 blocked"
+
+
+def test_edit_source_cascades_to_everything():
+    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    base = _build_base(graph, {"source.brief": _sha(BRIEF_A)})
+    plan = compute_impact(
+        graph, base_states=base, source_content_hashes={"source.brief": _sha(BRIEF_B)}
+    )
+    assert len(plan.rebuild_keys) == 9  # source + all 8 derived
+    source_impact = next(n for n in plan.nodes if n.stable_key == "source.brief")
+    assert source_impact.reason_code is ReasonCode.SOURCE_CONTENT_CHANGED
+    title = next(n for n in plan.nodes if n.stable_key == "title")
+    assert title.reason_code is ReasonCode.UPSTREAM_FINGERPRINT_CHANGED
+
