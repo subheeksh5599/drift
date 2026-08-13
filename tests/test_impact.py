@@ -68,3 +68,26 @@ def test_edit_source_cascades_to_everything():
     title = next(n for n in plan.nodes if n.stable_key == "title")
     assert title.reason_code is ReasonCode.UPSTREAM_FINGERPRINT_CHANGED
 
+
+def test_edit_handle_rebuilds_only_posts():
+    base_graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    base = _build_base(base_graph, {"source.brief": _sha(BRIEF_A)})
+    changed = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: "@newhandle"})
+    plan = compute_impact(
+        changed, base_states=base, source_content_hashes={"source.brief": _sha(BRIEF_A)}
+    )
+    assert plan.summary() == "2 rebuild / 7 reuse / 0 blocked"
+    assert set(plan.rebuild_keys) == set(EXPECTED_HANDLE_REBUILD)
+    for n in plan.nodes:
+        if n.stable_key in EXPECTED_HANDLE_REBUILD:
+            assert n.reason_code is ReasonCode.NODE_SPEC_CHANGED
+        else:
+            assert n.decision is ImpactDecision.REUSE
+
+
+def test_plan_hash_changes_with_decision():
+    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    base = _build_base(graph, {"source.brief": _sha(BRIEF_A)})
+    p1 = compute_impact(graph, base_states=base, source_content_hashes={"source.brief": _sha(BRIEF_A)})
+    p2 = compute_impact(graph, base_states=base, source_content_hashes={"source.brief": _sha(BRIEF_B)})
+    assert p1.plan_hash != p2.plan_hash
