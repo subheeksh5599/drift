@@ -58,3 +58,33 @@ def test_verify_catches_tampering(tmp_path):
 
 
 def test_verify_catches_missing_file(tmp_path):
+    d = _write_brief(tmp_path)
+    build(d, "@creator")
+    (d / "out" / "tags.txt").unlink()
+    ok, failures = verify(d / ".drift")
+    assert not ok
+    assert any("tags" in f for f in failures)
+
+
+def test_build_with_missing_source_fails_loudly(tmp_path):
+    import pytest
+
+    from drift.build import build as _build
+
+    with pytest.raises(FileNotFoundError):
+        _build(tmp_path, "@creator")  # no brief.txt
+
+
+def test_verify_catches_manifest_tampering(tmp_path):
+    import json
+
+    d = _write_brief(tmp_path)
+    r = build(d, "@creator")
+    manifest = r.manifest_path
+    payload = json.loads(manifest.read_text())
+    # Change a recorded output hash in place.
+    payload["assets"][0]["output_hash"] = "0" * 64
+    manifest.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    ok, failures = verify(d / ".drift")
+    assert not ok
+    assert any("manifest_hash" in f for f in failures)
