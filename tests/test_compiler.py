@@ -43,3 +43,11 @@ def test_rejects_missing_bound_parameter():
     with pytest.raises(GraphCompilationError):
         compile_graph(CREATOR_TEMPLATE, parameters={})
 
+
+def test_topological_order_respects_dependencies():
+    g = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
+    position = {key: i for i, key in enumerate(g.topological_order)}
+    assert g.topological_order[0] == "source.brief"
+    for node in g.nodes:
+        for slot in node.inputs:
+            assert position[slot.from_key] < position[node.stable_key]
