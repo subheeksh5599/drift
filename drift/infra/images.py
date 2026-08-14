@@ -110,6 +110,8 @@ def render_poster(title: str, product: str) -> bytes:
 
 def render_cutout(product: str) -> bytes:
     _, teal, orange = _theme(_seed(product))
+    words = [w for w in product.split() if w]
+    name = " ".join(words[:3])[:16].upper() or "PRODUCT"
     doc = f"""<!doctype html><html><head><meta charset="utf-8"><style>
       * {{ margin:0; box-sizing:border-box; }}
       body {{ width:600px; height:900px; background:#161a1e; position:relative; }}
@@ -121,11 +123,14 @@ def render_cutout(product: str) -> bytes:
                background:{teal}; }}
       .label-top {{ position:absolute; top:380px; left:180px; width:240px; height:18px;
                    background:{orange}; }}
+      .name {{ position:absolute; top:406px; left:190px; width:220px; color:#141519;
+              font-size:28px; font-weight:bold; text-align:center; letter-spacing:0.04em; }}
       .ring {{ position:absolute; top:520px; left:260px; width:80px; height:80px;
               border:4px solid #ebebe5; border-radius:50%; }}
     </style></head><body>
       <div class="cap"></div><div class="bottle"></div>
-      <div class="label"></div><div class="label-top"></div><div class="ring"></div>
+      <div class="label"></div><div class="label-top"></div>
+      <div class="name">{html.escape(name)}</div><div class="ring"></div>
     </body></html>"""
     return _screenshot(doc, 600, 900)
 

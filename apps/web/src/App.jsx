@@ -112,7 +112,7 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brief,
-        product: DEFAULT_PRODUCT,
+        product: brief,
         handle: '@creator',
         submission_key: `chat-${Date.now()}`,
       }),

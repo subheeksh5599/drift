@@ -84,8 +84,8 @@ ORBIT_TEMPLATE = GraphTemplate(
         ),
         _derived(
             "description", "Description",
-            [InputSlot("brief", "source.brief"), InputSlot("title", "title")],
-            operation={"template": "{brief}\n\n{title}"},
+            [InputSlot("brief", "source.brief")],
+            operation={"template": "{brief}"},
         ),
         _derived(
             "tags", "Tags",
