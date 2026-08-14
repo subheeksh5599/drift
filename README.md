@@ -2,7 +2,7 @@
 
 &nbsp;
 
-[![Live demo](https://img.shields.io/badge/●_live_demo-187.127.137.136%3A8793-34d399)](http://187.127.137.136:8793/)
+[![Live demo](https://img.shields.io/badge/●_live_demo-drift--pipeline.vercel.app-34d399)](https://drift-pipeline.vercel.app/)
 [![Landing](https://img.shields.io/badge/landing-drift--build.vercel.app-14151a)](https://drift-build.vercel.app)
 [![GitHub](https://img.shields.io/badge/repo-subheeksh5599%2Fdrift-14151a)](https://github.com/subheeksh5599/drift)
 [![License: MIT](https://img.shields.io/badge/license-MIT-34d399.svg)](LICENSE)
@@ -15,9 +15,9 @@
 
 Every title, caption, tag, post, poster, keyframe, narration and delivery video descends from one brief and one product reference. Edit the brief and everything downstream silently drifts stale. Drift treats that pipeline as a dependency graph — every asset content-addressed from its recipe and its exact inputs — so it can prove which assets are stale and rebuild only those, then re-verify the result from disk.
 
-### ▶ Live — type a brief at **[187.127.137.136:8793](http://187.127.137.136:8793/)** and watch 18 nodes rebuild
+### ▶ Live — type a brief at **[drift-pipeline.vercel.app](https://drift-pipeline.vercel.app/)** and watch 18 nodes rebuild
 
-**[ Live demo ↗ ](http://187.127.137.136:8793/)** · **[ Landing ↗ ](https://drift-build.vercel.app)** · **[ Repo ↗ ](https://github.com/subheeksh5599/drift)** · **[ Architecture ↓ ](#architecture)** · **[ Media (free, no API key) ↓ ](#media-generation--free-no-api-key)** · **[ Run it locally ↓ ](#run-it-locally)**
+**[ Live demo ↗ ](https://drift-pipeline.vercel.app/)** · **[ Landing ↗ ](https://drift-build.vercel.app)** · **[ Repo ↗ ](https://github.com/subheeksh5599/drift)** · **[ Architecture ↓ ](#architecture)** · **[ Media (free, no API key) ↓ ](#media-generation--free-no-api-key)** · **[ Run it locally ↓ ](#run-it-locally)**
 
 Built for the **Social Media Automation Hackathon**. MIT licensed.
 

@@ -18,6 +18,9 @@ data/
 # Node (dashboard)
 node_modules/
 
+# Vercel proxy config (contains the backend host — local-only, never commit the IP)
+apps/web/vercel.json
+
 # Editors / OS
 .vscode/
 .idea/
