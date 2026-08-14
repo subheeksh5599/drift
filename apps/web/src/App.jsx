@@ -6,9 +6,11 @@ const DEFAULT_PRODUCT =
 
 const MEDIA_ORDER = { VIDEO: 0, IMAGE: 1, AUDIO: 2, DERIVED: 3, SOURCE: 4 }
 
-function timeAgo(iso) {
-  if (!iso) return ''
-  const s = (Date.now() - new Date(iso).getTime()) / 1000
+function timeAgo(v) {
+  if (!v) return ''
+  const ms =
+    typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : new Date(v).getTime()
+  const s = (Date.now() - ms) / 1000
   if (s < 60) return 'just now'
   if (s < 3600) return `${Math.floor(s / 60)}m ago`
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
