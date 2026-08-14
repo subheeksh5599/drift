@@ -12,6 +12,12 @@ build/
 .drift/
 out/
 
+# API runtime data (durable queue + project content)
+data/
+
+# Node (dashboard)
+node_modules/
+
 # Editors / OS
 .vscode/
 .idea/

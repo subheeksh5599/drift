@@ -3,7 +3,11 @@ name = "drift"
 version = "0.1.0"
 description = "Content pipeline build system — prove what changed, rebuild only what is stale."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastapi>=0.110",
+    "pillow>=10",
+    "uvicorn[standard]>=0.29",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
