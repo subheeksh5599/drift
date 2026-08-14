@@ -11,13 +11,13 @@ from pathlib import Path
 
 from .build import load_sources
 from .compiler import compile_graph
-from .demo_graph import CREATOR_TEMPLATE, PARAM_HANDLE
+from .orbit import ORBIT_TEMPLATE, PARAM_HANDLE, SOURCE_FILES
 from .state import load_state
 
 
 def report(content_dir: Path, handle: str) -> None:
-    load_sources(content_dir)  # fail loudly if a source is missing
-    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: handle})
+    load_sources(content_dir, SOURCE_FILES)  # fail loudly if a source is missing
+    graph = compile_graph(ORBIT_TEMPLATE, parameters={PARAM_HANDLE: handle})
     state = load_state(content_dir / ".drift")
 
     if not state:

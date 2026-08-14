@@ -14,11 +14,11 @@ from pathlib import Path
 
 from .build import build, load_sources
 from .compiler import GraphCompilationError, compile_graph
-from .demo_graph import CREATOR_TEMPLATE, DEFAULT_HANDLE, PARAM_HANDLE
 from .enums import ImpactDecision
 from .generation import GenerationError
 from .impact import compute_impact
 from .manifest import verify as verify_build
+from .orbit import DEFAULT_HANDLE, ORBIT_TEMPLATE, PARAM_HANDLE, SOURCE_FILES
 from .report import report
 from .state import load_state
 
@@ -38,8 +38,8 @@ def _print_plan(plan) -> None:
 
 
 def cmd_plan(content_dir: Path, handle: str) -> int:
-    source_hashes, _ = load_sources(content_dir)
-    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: handle})
+    source_hashes, _ = load_sources(content_dir, SOURCE_FILES)
+    graph = compile_graph(ORBIT_TEMPLATE, parameters={PARAM_HANDLE: handle})
     base = load_state(content_dir / ".drift")
     plan = compute_impact(graph, base_states=base, source_content_hashes=source_hashes)
     print(f"template: {graph.template_key} v{graph.template_version}")
@@ -48,7 +48,7 @@ def cmd_plan(content_dir: Path, handle: str) -> int:
 
 
 def cmd_build(content_dir: Path, handle: str) -> int:
-    result = build(content_dir, handle)
+    result = build(content_dir, ORBIT_TEMPLATE, SOURCE_FILES, {PARAM_HANDLE: handle})
     print(f"build {result.build_id}: {result.summary}")
     print(f"manifest:  {result.manifest_path}")
     print()
