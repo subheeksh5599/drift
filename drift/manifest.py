@@ -74,10 +74,9 @@ def verify(state_dir: Path, build_id: str | None = None) -> tuple[bool, list[str
     if build_id is not None:
         path = builds_dir / f"{build_id}.json"
     else:
-        manifests = sorted(builds_dir.glob("*.json"))
-        if not manifests:
+        path = _latest_manifest(builds_dir)
+        if path is None:
             return False, ["no builds found"]
-        path = manifests[-1]
 
     if not path.exists():
         return False, [f"manifest not found: {path}"]
@@ -100,3 +99,23 @@ def verify(state_dir: Path, build_id: str | None = None) -> tuple[bool, list[str
             failures.append(f"{asset['stable_key']}: hash mismatch ({asset['path']})")
 
     return (len(failures) == 0, failures)
+
+
+def _latest_manifest(builds_dir: Path) -> Path | None:
+    """Return the manifest of the most recent build, by its recorded created_at.
+
+    Build ids are random hex, so filename order is meaningless. The
+    authoritative order is the timestamp each build wrote into its own manifest.
+    """
+    manifests = list(builds_dir.glob("*.json"))
+    if not manifests:
+        return None
+
+    def created_at(path: Path) -> datetime:
+        try:
+            payload = json.loads(path.read_text())
+            return datetime.fromisoformat(payload["created_at"])
+        except (KeyError, ValueError, json.JSONDecodeError, OSError):
+            return datetime.min
+
+    return max(manifests, key=created_at)
