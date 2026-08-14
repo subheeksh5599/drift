@@ -1,6 +1,6 @@
 # DRIFT
 
-![tests](https://img.shields.io/badge/tests-22%20passing-34d399)
+![tests](https://img.shields.io/badge/tests-35%20passing-34d399)
 ![pure](https://img.shields.io/badge/domain-pure%20Python%20·%20zero%20I%2FO-14151a)
 ![std](https://img.shields.io/badge/deps-standard%20library%20only-14151a)
 ![license](https://img.shields.io/badge/license-MIT-34d399.svg)
@@ -121,7 +121,7 @@ uv run python -m drift.cli plan demo/content      # predict, touch nothing
 uv run python -m drift.cli build demo/content     # rebuild stale assets
 uv run python -m drift.cli verify demo/content    # re-hash everything
 uv run python -m drift.cli report demo/content    # provenance receipt
-uv run pytest                                     # 22 tests
+uv run pytest                                     # 35 tests
 ```
 
 ## Project layout
