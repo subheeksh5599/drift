@@ -79,13 +79,20 @@ def build(content_dir: Path, handle: str) -> BuildResult:
             continue
 
         out_path = out_dir / f"{key}.txt"
-        if decision.get(key) is ImpactDecision.REUSE and out_path.exists():
-            text = out_path.read_text()
-            resolved[key] = text
-            output_hashes[key] = _hash_bytes(text.encode("utf-8"))
+        prev = base.get(key)
+        disk_hash = _hash_bytes(out_path.read_bytes()) if out_path.exists() else None
+        if (
+            decision.get(key) is ImpactDecision.REUSE
+            and disk_hash is not None
+            and prev is not None
+            and disk_hash == prev.output_hash
+        ):
+            resolved[key] = out_path.read_text()
+            output_hashes[key] = disk_hash
             continue
 
-        # Rebuild (or reuse whose output file went missing — regenerate defensively).
+        # Rebuild — or regenerate a reuse whose bytes diverged from the recorded
+        # hash (a tampered or externally edited file is never trusted as-is).
         text = render_node(node, resolved)
         out_path.write_text(text)
         resolved[key] = text
