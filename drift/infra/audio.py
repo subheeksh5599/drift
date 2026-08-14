@@ -121,5 +121,8 @@ def render_narration(description: str) -> bytes:
     if edge:
         return edge
     if _has_flite():
-        return _flite(description)
+        try:
+            return _flite(description)
+        except Exception:
+            pass  # flite chokes on some characters — fall back to the tone
     return _tone(description)
