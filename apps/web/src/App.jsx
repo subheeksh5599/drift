@@ -158,14 +158,15 @@ export default function App() {
     setMessages([])
   }
 
-  function openJob(job) {
+  async function openJob(job) {
     const text =
       job.result?.summary ||
       job.error ||
       (job.status === 'running' ? 'building…' : job.status)
+    const assets = await fetch(API('/assets')).then((r) => r.json())
     setMessages([
       { role: 'user', text: job.payload?.brief || '(no brief)' },
-      { role: 'assistant', text },
+      { role: 'assistant', text, assets },
     ])
   }
 
