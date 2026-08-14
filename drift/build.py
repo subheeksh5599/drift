@@ -1,7 +1,7 @@
 """Build orchestration: impact -> generate only what changed -> record state.
 
 Handles both text and media nodes. Text nodes render deterministically in the
-domain; media nodes are dispatched to `drift.infra` (Pillow/ffmpeg). Each node's
+domain; media nodes are dispatched to `drift.infra` (HTML+Chrome and ffmpeg). Each node's
 inputs are resolved as text or a file path depending on the upstream node's
 type, the output bytes are written, and real output hashes are recorded so the
 next run's reuse proof agrees with what actually happened.

@@ -9,8 +9,9 @@ invalidates exactly two nodes instead of the whole pipeline — the same
 blast-radius discipline as any volatile copy: keep it in a parameter, not the
 source.
 
-Media generation is deterministic (Pillow + ffmpeg), so the whole graph is
-content-addressed and verifiable without any non-deterministic model call.
+Media generation is deterministic (HTML + headless Chrome for images, ffmpeg
+for audio/video), so the whole graph is content-addressed and verifiable
+without any non-deterministic model call.
 """
 
 from __future__ import annotations

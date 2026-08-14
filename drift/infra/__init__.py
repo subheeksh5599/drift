@@ -1,6 +1,7 @@
 """Media generation — the binary-asset layer.
 
-Deterministic Pillow + ffmpeg generators. No model, no randomness: the same
-inputs always render the same bytes, so a generated image/audio/video is
+Deterministic generators. No model, no randomness: images are authored as
+HTML/CSS/SVG and rendered by headless Chrome; audio and video are ffmpeg. The
+same inputs always render the same bytes, so a generated asset is
 content-addressed like any other node in the graph.
 """
