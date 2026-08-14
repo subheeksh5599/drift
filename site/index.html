@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Drift — rebuild only what changed</title>
+<meta name="description" content="Drift is a build system for a creator's content pipeline. Every asset is content-addressed from its source, so changing one line rebuilds only what is stale." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bone: #EDEAE3;
+    --ink: #0A0A0A;
+    --signal: #D9FF00;
+    --danger: #FF4D00;
+    --muted: #5A5A5A;
+    --line: rgba(10,10,10,0.12);
+    --line-soft: rgba(10,10,10,0.08);
+    --surface: #E5E1D6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bone);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--signal); color: var(--ink); }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 32px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    background: var(--bone);
+    z-index: 10;
+  }
+  .brand {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .nav-link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .nav-link:hover { border-color: var(--ink); }
+
+  .hero {
+    padding: 120px 32px 96px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .hero .kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hero .kicker .dot {
+    width: 8px; height: 8px;
+    background: var(--signal);
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .hero h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: clamp(48px, 9vw, 120px);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    max-width: 14ch;
+  }
+  .hero .lede {
+    margin-top: 36px;
+    max-width: 56ch;
+    color: var(--muted);
+    font-size: 19px;
+    line-height: 1.65;
+  }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .cta-row {
+    margin-top: 44px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    padding: 13px 22px;
+    border-radius: 6px;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .cta-primary {
+    background: var(--signal);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .cta-primary:hover { transform: translateY(-2px); }
+  .cta-ghost {
+    border: 1px solid var(--ink);
+    color: var(--ink);
+  }
+  .cta-ghost:hover { background: var(--ink); color: var(--bone); }
+
+  .section {
+    border-top: 1px solid var(--line);
+    padding: 88px 32px;
+  }
+  .section .inner { max-width: 1200px; margin: 0 auto; }
+  .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .section h2 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: clamp(32px, 4.5vw, 56px);
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+    max-width: 24ch;
+  }
+  .section .body {
+    margin-top: 24px;
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 17px;
+  }
+  .section .body strong { color: var(--ink); }
+
+  .grid {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .card {
+    background: var(--bone);
+    padding: 40px 36px;
+  }
+  .card .card-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .card .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    background: var(--signal);
+    color: var(--ink);
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .card h3 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+  .card .num {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 64px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-top: 8px;
+  }
+  .card .num small {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0;
+    margin-left: 6px;
+  }
+  .card p { color: var(--muted); font-size: 15px; margin-top: 14px; }
+
+  .verify {
+    background: var(--ink);
+    color: var(--bone);
+    padding: 88px 32px;
+  }
+  .verify .inner { max-width: 1200px; margin: 0 auto; }
+  .verify .label { color: rgba(235,235,229,0.55); }
+  .verify h2 { color: var(--bone); }
+  .verify .body { color: rgba(235,235,229,0.65); }
+  .verify .body strong { color: var(--bone); }
+  .terminal {
+    margin-top: 44px;
+    background: #050505;
+    border: 1px solid rgba(235,235,229,0.14);
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    line-height: 1.9;
+  }
+  .terminal .bar {
+    display: flex;
+    gap: 8px;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(235,235,229,0.1);
+  }
+  .terminal .bar span { width: 10px; height: 10px; border-radius: 50%; background: rgba(235,235,229,0.18); }
+  .terminal .bar span:first-child { background: var(--signal); }
+  .terminal pre {
+    padding: 22px 24px;
+    overflow-x: auto;
+    color: #EBEBE5;
+  }
+  .terminal .c { color: rgba(235,235,229,0.55); }
+  .terminal .ok { color: var(--signal); }
+  .terminal .rebuild { color: var(--danger); }
+
+  .footer {
+    border-top: 1px solid var(--line);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .footer .brand { font-size: 16px; }
+  .footer .meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.25,0.1,0.25,1); }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="#">DRIFT</a>
+  <a class="nav-link" href="#proof">Prove it</a>
+</nav>
+
+<header class="hero">
+  <div class="kicker"><span class="dot"></span>Content pipeline build system</div>
+  <h1>Edit the brief. Rebuild only what changed.</h1>
+  <p class="lede">Drift treats your content pipeline as a <strong>dependency graph</strong>. Every title, caption, tag and post is content-addressed from its source — so changing one line rebuilds the four assets that depend on it, not all nine. And a manifest lets anyone re-verify what a build shipped.</p>
+  <div class="cta-row">
+    <a class="cta cta-primary" href="https://github.com/subheeksh5599/drift">View on GitHub ↗</a>
+    <a class="cta cta-ghost" href="#proof">Verify it yourself</a>
+  </div>
+</header>
+
+<section class="section" id="problem">
+  <div class="inner">
+    <div class="label">The problem</div>
+    <h2>One brief. Nine derived assets. Change one line and they all drift stale.</h2>
+    <p class="body">A creator ships a title, description, tags, thumbnail caption, captions and posts — all descended from one brief. Edit the brief and every downstream asset silently goes stale. Fix them by hand and you forget one. Schedulers will post them for you; <strong>no tool tells you which ones are no longer true</strong>.</p>
+  </div>
+</section>
+
+<section class="section" id="scenarios">
+  <div class="inner">
+    <div class="label">Two scenarios, measured</div>
+    <h2>The blast radius is the product.</h2>
+
+    <div class="grid">
+      <div class="card reveal">
+        <div class="card-label">Edit the source <span class="pill">cascade</span></div>
+        <h3>Change one line in the brief.</h3>
+        <div class="num">9<span class="rebuild" style="color:var(--danger); font-family:'IBM Plex Mono',monospace; font-size:14px; letter-spacing:0;"> rebuild</span><small>/ 0 reuse</small></div>
+        <p>Every derived asset re-fingerprints against the new source. The invalidation cascades through the graph automatically — nothing is silently trusted.</p>
+      </div>
+      <div class="card reveal">
+        <div class="card-label">Edit the handle <span class="pill">bound</span></div>
+        <h3>Change only the handle.</h3>
+        <div class="num">2<span style="font-family:'IBM Plex Mono',monospace; font-size:14px; letter-spacing:0;"> rebuild</span><small>/ 7 reuse</small></div>
+        <p>The handle is a bound parameter — it can only reach the two post nodes. Seven assets survive untouched, because the graph proves they never depended on it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="verify" id="proof">
+  <div class="inner">
+    <div class="label">Prove it</div>
+    <h2>Nothing here is a mockup.</h2>
+    <p class="body">Every number is a real run against a real file. Re-hash every asset from disk and the manifest confirms it — <strong>change one byte and it fails</strong>.</p>
+
+    <div class="terminal reveal">
+      <div class="bar"><span></span><span></span><span></span></div>
+      <pre><span class="c">$</span> drift build demo/content              <span class="c"># 9 rebuild / 0 reuse</span>
+<span class="c">$</span> drift build demo/content              <span class="c"># 0 rebuild / 9 reuse</span>
+<span class="c">$</span> drift build demo/content --handle @newhandle   <span class="c"># 2 rebuild / 7 reuse</span>
+<span class="c">$</span> drift verify demo/content             <span class="ok"># OK — every asset re-hashes</span>
+
+<span class="c">$</span> echo TAMPERED &gt; out/tags.txt
+<span class="c">$</span> drift verify demo/content             <span class="rebuild"># FAILED — tags: hash mismatch</span></pre>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <a class="brand" href="#">DRIFT</a>
+  <div class="meta">MIT licensed · stdlib only · 35 tests</div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.15 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
