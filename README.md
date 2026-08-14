@@ -38,3 +38,33 @@ build a97745bffcdc: 2 rebuild / 7 reuse / 0 blocked
   rebuilt  post.linkedin
   reused   source.brief
   reused   title
+  reused   description
+  reused   tags
+  reused   thumbnail_caption
+  reused   caption.x
+  reused   caption.linkedin
+```
+
+The handle is a **bound parameter** — it is bound into exactly two nodes, so a
+handle change can only invalidate those two. That is the whole claim, and it
+falls out of the fingerprint algorithm rather than being special-cased.
+
+---
+
+## Proof — nothing here is a mockup
+
+Every number above came out of a real run against a real file. Run it yourself:
+
+```bash
+uv sync --extra dev
+uv run python -m drift.cli build demo/content        # 9 rebuild / 0 reuse
+uv run python -m drift.cli build demo/content        # 0 rebuild / 9 reuse
+uv run python -m drift.cli build demo/content --handle @newhandle   # 2 rebuild / 7 reuse
+uv run python -m drift.cli verify demo/content       # OK — every asset re-hashes
+```
+
+Tamper with one generated file and `verify` catches it:
+
+```
+$ echo TAMPERED > demo/content/out/tags.txt
+$ uv run python -m drift.cli verify demo/content
