@@ -171,6 +171,32 @@ body {
   75% { content: '...'; }
 }
 
+/* ---------- rebuild proof ---------- */
+.proof { margin-bottom: 12px; }
+.strip { display: flex; gap: 3px; flex-wrap: wrap; }
+.gnode {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d4d4cf;
+  display: inline-block;
+}
+.gnode.rebuilt { background: #22c55e; }
+.gnode.reused { background: #d4d4cf; }
+.gnode.blocked { background: #ef4444; }
+.legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.rebuilt { background: #22c55e; }
+.dot.reused { background: #d4d4cf; }
+.dot.blocked { background: #ef4444; }
+
 /* ---------- assets ---------- */
 .asset-grid {
   display: grid;

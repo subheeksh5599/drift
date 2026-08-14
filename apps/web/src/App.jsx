@@ -51,12 +51,15 @@ function AssetCard({ a }) {
   )
 }
 
-function Answer({ msg }) {
+function Answer({ msg, graph }) {
   const video = msg.assets?.find((a) => a.node_type === 'VIDEO')
   const rest = (msg.assets || []).filter((a) => a.node_type !== 'VIDEO')
   const sorted = [...rest].sort(
     (x, y) => (MEDIA_ORDER[x.node_type] ?? 9) - (MEDIA_ORDER[y.node_type] ?? 9),
   )
+  const rebuilt = new Set(msg.result?.rebuild || [])
+  const reused = new Set(msg.result?.reuse || [])
+  const order = graph?.order || []
   return (
     <div className="answer">
       {video && (
@@ -66,6 +69,36 @@ function Answer({ msg }) {
         </div>
       )}
       <div className="sum">{friendlySummary(msg.text)}</div>
+      {order.length > 0 && (
+        <div className="proof">
+          <div className="strip">
+            {order.map((key) => {
+              const st = rebuilt.has(key)
+                ? 'rebuilt'
+                : reused.has(key)
+                  ? 'reused'
+                  : 'blocked'
+              return (
+                <span
+                  key={key}
+                  className={`gnode ${st}`}
+                  title={`${key} · ${st}`}
+                />
+              )
+            })}
+          </div>
+          <div className="legend">
+            <span>
+              <i className="dot rebuilt" />
+              rebuilt
+            </span>
+            <span>
+              <i className="dot reused" />
+              reused
+            </span>
+          </div>
+        </div>
+      )}
       {sorted.length > 0 && (
         <details className="more">
           <summary>All assets ({msg.assets.length})</summary>
@@ -84,18 +117,21 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [jobs, setJobs] = useState([])
   const [stats, setStats] = useState(null)
+  const [graph, setGraph] = useState(null)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [thinking, setThinking] = useState(false)
   const bottomRef = useRef(null)
 
   async function loadHistory() {
-    const [j, s] = await Promise.all([
+    const [j, s, g] = await Promise.all([
       fetch(API('/jobs')).then((r) => r.json()),
       fetch(API('/stats')).then((r) => r.json()),
+      fetch(API('/graph')).then((r) => r.json()),
     ])
     setJobs(j)
     setStats(s)
+    setGraph(g)
   }
 
   useEffect(() => {
@@ -222,7 +258,7 @@ export default function App() {
               {m.role === 'user' ? (
                 <div className="bubble">{m.text}</div>
               ) : (
-                <Answer msg={m} />
+                <Answer msg={m} graph={graph} />
               )}
             </div>
           ))}
