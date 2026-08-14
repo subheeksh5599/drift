@@ -1,9 +1,10 @@
 """Build orchestration: impact -> generate only what changed -> record state.
 
-The impact engine predicts what will rebuild; the build carries it out and
-records the post-build reality: every node's real fingerprint, computed from
-real output hashes, so the next run's reuse proof agrees with what actually
-happened (not with the `pending:` placeholders the plan used to predict).
+Handles both text and media nodes. Text nodes render deterministically in the
+domain; media nodes are dispatched to `drift.infra` (Pillow/ffmpeg). Each node's
+inputs are resolved as text or a file path depending on the upstream node's
+type, the output bytes are written, and real output hashes are recorded so the
+next run's reuse proof agrees with what actually happened.
 """
 
 from __future__ import annotations
@@ -14,8 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .compiler import compile_graph
-from .demo_graph import CREATOR_TEMPLATE, PARAM_HANDLE, SOURCE_FILES
-from .enums import ImpactDecision
+from .enums import ImpactDecision, output_extension
 from .fingerprint import compute_fingerprint, compute_source_fingerprint
 from .generation import render_node
 from .impact import NodeCacheState, compute_impact
@@ -27,15 +27,19 @@ def _hash_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
 
 
-def load_sources(content_dir: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """Return (source_content_hashes, source_texts) for every source file.
+def _kind(node) -> str:
+    return "media" if node.node_type.is_media else "text"
+
+
+def load_sources(content_dir: Path, source_files: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Return (source_content_hashes, source_texts) for every declared source file.
 
     Raises FileNotFoundError if a declared source file is missing — a missing
     source must fail loudly, not silently hash nothing.
     """
     hashes: dict[str, str] = {}
     texts: dict[str, str] = {}
-    for stable_key, filename in SOURCE_FILES.items():
+    for stable_key, filename in source_files.items():
         path = content_dir / filename
         if not path.exists():
             raise FileNotFoundError(f"missing source file: {path}")
@@ -55,9 +59,9 @@ class BuildResult:
     manifest_path: Path
 
 
-def build(content_dir: Path, handle: str) -> BuildResult:
-    source_hashes, source_texts = load_sources(content_dir)
-    graph = compile_graph(CREATOR_TEMPLATE, parameters={PARAM_HANDLE: handle})
+def build(content_dir: Path, template, source_files: dict[str, str], parameters: dict[str, str]) -> BuildResult:
+    source_hashes, source_texts = load_sources(content_dir, source_files)
+    graph = compile_graph(template, parameters=parameters)
 
     state_dir = content_dir / ".drift"
     base = load_state(state_dir)
@@ -68,17 +72,32 @@ def build(content_dir: Path, handle: str) -> BuildResult:
 
     decision = {n.stable_key: n.decision for n in plan.nodes}
 
-    # Generate in topological order, keeping the real output text and hash per node.
-    resolved: dict[str, str] = {}
+    resolved_text: dict[str, str] = {}
+    output_paths: dict[str, Path] = {}
+    output_kind: dict[str, str] = {}
     output_hashes: dict[str, str] = {}
+
     for key in graph.topological_order:
         node = graph.by_key[key]
+        out_path = out_dir / f"{key}{output_extension(node.node_type)}"
+
         if node.node_type.is_source:
-            resolved[key] = source_texts[key]
+            resolved_text[key] = source_texts[key]
             output_hashes[key] = source_hashes[key]
+            output_kind[key] = "text"
             continue
 
-        out_path = out_dir / f"{key}.txt"
+        inputs_slot: dict[str, object] = {}
+        inputs_from: dict[str, str] = {}
+        for slot in node.inputs:
+            up = slot.from_key
+            if output_kind.get(up) == "media":
+                inputs_slot[slot.slot] = output_paths[up]
+            else:
+                value = resolved_text.get(up, "")
+                inputs_slot[slot.slot] = value
+                inputs_from[up] = value
+
         prev = base.get(key)
         disk_hash = _hash_bytes(out_path.read_bytes()) if out_path.exists() else None
         if (
@@ -87,16 +106,29 @@ def build(content_dir: Path, handle: str) -> BuildResult:
             and prev is not None
             and disk_hash == prev.output_hash
         ):
-            resolved[key] = out_path.read_text()
+            output_paths[key] = out_path
             output_hashes[key] = disk_hash
+            output_kind[key] = _kind(node)
+            if not node.node_type.is_media:
+                resolved_text[key] = out_path.read_text()
             continue
 
         # Rebuild — or regenerate a reuse whose bytes diverged from the recorded
         # hash (a tampered or externally edited file is never trusted as-is).
-        text = render_node(node, resolved)
-        out_path.write_text(text)
-        resolved[key] = text
-        output_hashes[key] = _hash_bytes(text.encode("utf-8"))
+        if node.node_type.is_media:
+            from .infra.render import render_media
+
+            data = render_media(node, inputs_slot)
+            out_path.write_bytes(data)
+            output_hashes[key] = _hash_bytes(data)
+            output_kind[key] = "media"
+        else:
+            text = render_node(node, inputs_from)
+            out_path.write_text(text)
+            resolved_text[key] = text
+            output_hashes[key] = _hash_bytes(text.encode("utf-8"))
+            output_kind[key] = "text"
+        output_paths[key] = out_path
 
     # Record post-build reality: real fingerprints from real output hashes.
     state: dict[str, NodeCacheState] = {}
@@ -116,7 +148,7 @@ def build(content_dir: Path, handle: str) -> BuildResult:
     save_state(state_dir, state)
 
     build_id = uuid.uuid4().hex[:12]
-    manifest_path = write_manifest(state_dir, build_id, graph, plan, output_hashes)
+    manifest_path = write_manifest(state_dir, build_id, graph, plan, output_hashes, source_files)
 
     return BuildResult(
         build_id=build_id,

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .canonical import canonical_hash
-from .demo_graph import SOURCE_FILES
+from .enums import output_extension
 from .types import CompiledGraph
 
 MANIFEST_SCHEMA = "drift-build-v1"
@@ -34,6 +34,7 @@ def write_manifest(
     graph: CompiledGraph,
     plan,
     output_hashes: dict[str, str],
+    source_files: dict[str, str],
 ) -> Path:
     builds_dir = state_dir / "builds"
     builds_dir.mkdir(parents=True, exist_ok=True)
@@ -41,7 +42,11 @@ def write_manifest(
     assets = []
     for key in graph.topological_order:
         node = graph.by_key[key]
-        path = SOURCE_FILES[key] if node.node_type.is_source else f"out/{key}.txt"
+        path = (
+            source_files[key]
+            if node.node_type.is_source
+            else f"out/{key}{output_extension(node.node_type)}"
+        )
         assets.append(
             {
                 "stable_key": key,
