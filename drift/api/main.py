@@ -1,8 +1,11 @@
-"""FastAPI control plane.
+"""FastAPI control plane + dashboard serving.
 
 Submit a commit, poll the durable queue, and read the resulting assets and
 graph. The heavy lifting happens in the worker, which leases jobs and runs the
 drift engine; this service only enqueues and reports.
+
+When the dashboard is built (apps/web/dist), this app also serves it at "/",
+so one URL is both the API and the working UI.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -25,7 +28,8 @@ DATA_DIR = Path(os.environ.get("DRIFT_DATA_DIR", "data"))
 app = FastAPI(title="drift", version="1.0.0")
 queue = Queue(DATA_DIR / "queue.db")
 store = ProjectStore(DATA_DIR)
-app.mount("/files", StaticFiles(directory=store.content), name="files")
+
+api = APIRouter(prefix="/api")
 
 
 class Commit(BaseModel):
@@ -42,7 +46,7 @@ def _hydrate(job: dict) -> dict:
     return job
 
 
-@app.post("/commit")
+@api.post("/commit")
 def commit(body: Commit):
     store.write_sources(body.brief, body.product)
     job_id, created = queue.submit(
@@ -52,12 +56,12 @@ def commit(body: Commit):
     return {"job_id": job_id, "created": created}
 
 
-@app.get("/jobs")
+@api.get("/jobs")
 def jobs():
     return [_hydrate(j) for j in queue.list()]
 
 
-@app.get("/jobs/{job_id}")
+@api.get("/jobs/{job_id}")
 def job(job_id: str):
     row = queue.get(job_id)
     if row is None:
@@ -65,12 +69,12 @@ def job(job_id: str):
     return _hydrate(row)
 
 
-@app.get("/stats")
+@api.get("/stats")
 def stats():
     return queue.stats()
 
 
-@app.get("/graph")
+@api.get("/graph")
 def graph():
     compiled = compile_graph(ORBIT_TEMPLATE, parameters={PARAM_HANDLE: DEFAULT_HANDLE})
     nodes = [
@@ -89,11 +93,25 @@ def graph():
     }
 
 
-@app.get("/assets")
+@api.get("/assets")
 def assets():
     return store.assets()
 
 
-@app.get("/health")
+@api.get("/health")
 def health():
     return {"ok": True, "stats": queue.stats()}
+
+
+app.include_router(api)
+app.mount("/files", StaticFiles(directory=store.content), name="files")
+
+# Serve the built dashboard at "/" so the live URL is a working UI, not JSON.
+WEB_DIR = Path(
+    os.environ.get(
+        "DRIFT_WEB_DIR",
+        str(Path(__file__).resolve().parents[2] / "apps" / "web" / "dist"),
+    )
+)
+if WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

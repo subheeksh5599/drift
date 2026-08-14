@@ -2,13 +2,26 @@ import { useEffect, useState } from 'react'
 
 const API = (p) => `/api${p}`
 
+const MEDIA_ORDER = { VIDEO: 0, IMAGE: 1, AUDIO: 2, DERIVED: 3, SOURCE: 4 }
+
+function TextAsset({ path }) {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    fetch(`/files/${path}`)
+      .then((r) => r.text())
+      .then(setText)
+      .catch(() => setText(''))
+  }, [path])
+  return <pre className="text">{text}</pre>
+}
+
 export default function App() {
   const [graph, setGraph] = useState(null)
   const [jobs, setJobs] = useState([])
   const [assets, setAssets] = useState([])
   const [stats, setStats] = useState(null)
   const [form, setForm] = useState({
-    brief: 'Launch a hydration brand. Dark graphite set, crisp white bottle, teal orbital line.',
+    brief: 'Launch a hydration brand. Dark graphite set, crisp white bottle, teal orbital line, restrained orange accent. Four shots, cinematic.',
     product: 'Dark graphite set, crisp white bottle, teal orbital line, orange accent.',
     handle: '@creator',
   })
@@ -48,6 +61,10 @@ export default function App() {
   for (const n of graph?.nodes || []) {
     ;(byType[n.type] ||= []).push(n)
   }
+
+  const sorted = [...assets].sort(
+    (x, y) => (MEDIA_ORDER[x.node_type] ?? 9) - (MEDIA_ORDER[y.node_type] ?? 9),
+  )
 
   return (
     <div className="app">
@@ -111,7 +128,7 @@ export default function App() {
           <h2>Assets {assets.length > 0 && <span className="count">{assets.length}</span>}</h2>
           {assets.length === 0 && <p className="empty">Run a build to generate assets.</p>}
           <div className="asset-grid">
-            {assets.map((a) => (
+            {sorted.map((a) => (
               <div key={a.stable_key} className={`asset ${a.node_type.toLowerCase()}`}>
                 {a.node_type === 'IMAGE' && (
                   <img src={`/files/${a.path}`} alt={a.stable_key} />
@@ -122,8 +139,8 @@ export default function App() {
                 {a.node_type === 'AUDIO' && (
                   <audio src={`/files/${a.path}`} controls />
                 )}
-                {a.node_type === 'DERIVED' && (
-                  <pre className="text">{a.path}</pre>
+                {(a.node_type === 'DERIVED' || a.node_type === 'SOURCE') && (
+                  <TextAsset path={a.path} />
                 )}
                 <div className="cap">
                   <span>{a.stable_key}</span>
@@ -135,7 +152,7 @@ export default function App() {
         </section>
 
         <section className="graph">
-          <h2>Graph</h2>
+          <h2>Graph — {graph?.order?.length || 0} nodes</h2>
           {Object.entries(byType).map(([type, nodes]) => (
             <div key={type} className="type-group">
               <div className="type-label">{type}</div>
