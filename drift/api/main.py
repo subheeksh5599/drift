@@ -50,7 +50,7 @@ def _hydrate(job: dict) -> dict:
 def commit(body: Commit):
     store.write_sources(body.brief, body.product)
     job_id, created = queue.submit(
-        {"handle": body.handle},
+        {"handle": body.handle, "brief": body.brief, "product": body.product},
         submission_key=body.submission_key,
     )
     return {"job_id": job_id, "created": created}

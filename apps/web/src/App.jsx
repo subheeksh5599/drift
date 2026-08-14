@@ -1,8 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const API = (p) => `/api${p}`
+const DEFAULT_PRODUCT =
+  'Dark graphite set, crisp white bottle, teal orbital line, orange accent.'
 
 const MEDIA_ORDER = { VIDEO: 0, IMAGE: 1, AUDIO: 2, DERIVED: 3, SOURCE: 4 }
+
+function timeAgo(iso) {
+  if (!iso) return ''
+  const s = (Date.now() - new Date(iso).getTime()) / 1000
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
 
 function TextAsset({ path }) {
   const [text, setText] = useState('')
@@ -15,157 +26,208 @@ function TextAsset({ path }) {
   return <pre className="text">{text}</pre>
 }
 
-export default function App() {
-  const [graph, setGraph] = useState(null)
-  const [jobs, setJobs] = useState([])
-  const [assets, setAssets] = useState([])
-  const [stats, setStats] = useState(null)
-  const [form, setForm] = useState({
-    brief: 'Launch a hydration brand. Dark graphite set, crisp white bottle, teal orbital line, restrained orange accent. Four shots, cinematic.',
-    product: 'Dark graphite set, crisp white bottle, teal orbital line, orange accent.',
-    handle: '@creator',
-  })
-  const [busy, setBusy] = useState(false)
+function AssetCard({ a }) {
+  return (
+    <div className={`asset ${a.node_type.toLowerCase()}`}>
+      {a.node_type === 'IMAGE' && <img src={`/files/${a.path}`} alt={a.stable_key} />}
+      {a.node_type === 'VIDEO' && <video src={`/files/${a.path}`} controls muted />}
+      {a.node_type === 'AUDIO' && <audio src={`/files/${a.path}`} controls />}
+      {(a.node_type === 'DERIVED' || a.node_type === 'SOURCE') && (
+        <TextAsset path={a.path} />
+      )}
+      <div className="cap">
+        <span>{a.stable_key}</span>
+        <code>{a.output_hash.slice(0, 8)}</code>
+      </div>
+    </div>
+  )
+}
 
-  async function refresh() {
-    const [g, j, a, s] = await Promise.all([
-      fetch(API('/graph')).then((r) => r.json()),
+export default function App() {
+  const [messages, setMessages] = useState([])
+  const [jobs, setJobs] = useState([])
+  const [stats, setStats] = useState(null)
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [thinking, setThinking] = useState(false)
+  const bottomRef = useRef(null)
+
+  async function loadHistory() {
+    const [j, s] = await Promise.all([
       fetch(API('/jobs')).then((r) => r.json()),
-      fetch(API('/assets')).then((r) => r.json()),
       fetch(API('/stats')).then((r) => r.json()),
     ])
-    setGraph(g)
     setJobs(j)
-    setAssets(a)
     setStats(s)
   }
 
   useEffect(() => {
-    refresh()
-    const t = setInterval(refresh, 2500)
-    return () => clearInterval(t)
+    loadHistory()
   }, [])
 
-  async function commit() {
-    setBusy(true)
-    await fetch(API('/commit'), {
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, thinking])
+
+  async function commitBrief(brief) {
+    const res = await fetch(API('/commit'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, submission_key: `ui-${Date.now()}` }),
+      body: JSON.stringify({
+        brief,
+        product: DEFAULT_PRODUCT,
+        handle: '@creator',
+        submission_key: `chat-${Date.now()}`,
+      }),
     })
-    setBusy(false)
-    refresh()
+    return (await res.json()).job_id
   }
 
-  const byType = {}
-  for (const n of graph?.nodes || []) {
-    ;(byType[n.type] ||= []).push(n)
+  async function send() {
+    const brief = input.trim()
+    if (!brief || busy) return
+    setInput('')
+    setBusy(true)
+    setMessages((m) => [...m, { role: 'user', text: brief }])
+    setThinking(true)
+    try {
+      const jobId = await commitBrief(brief)
+      let job = null
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        job = await fetch(API(`/jobs/${jobId}`)).then((r) => r.json())
+        if (job.status === 'succeeded' || job.status === 'failed') break
+      }
+      const assets = await fetch(API('/assets')).then((r) => r.json())
+      setMessages((m) => [
+        ...m,
+        {
+          role: 'assistant',
+          text: job?.result?.summary || job?.error || 'build finished',
+          result: job?.result,
+          assets,
+        },
+      ])
+    } catch {
+      setMessages((m) => [...m, { role: 'assistant', text: 'build failed' }])
+    } finally {
+      setThinking(false)
+      setBusy(false)
+      loadHistory()
+    }
   }
 
-  const sorted = [...assets].sort(
-    (x, y) => (MEDIA_ORDER[x.node_type] ?? 9) - (MEDIA_ORDER[y.node_type] ?? 9),
-  )
+  function newChat() {
+    setMessages([])
+  }
+
+  function openJob(job) {
+    const text =
+      job.result?.summary ||
+      job.error ||
+      (job.status === 'running' ? 'building…' : job.status)
+    setMessages([
+      { role: 'user', text: job.payload?.brief || '(no brief)' },
+      { role: 'assistant', text, result: job.result },
+    ])
+  }
 
   return (
     <div className="app">
-      <header className="top">
-        <div className="brand">DRIFT</div>
-        <div className="stats">
+      <aside className="sidebar">
+        <div className="side-head">
+          <div className="brand">DRIFT</div>
+          <button className="new" onClick={newChat}>
+            + New build
+          </button>
+        </div>
+        <div className="history">
+          <div className="hist-label">History</div>
+          {jobs.length === 0 && <div className="empty">No builds yet.</div>}
+          {jobs.map((j) => (
+            <button key={j.id} className="hist-item" onClick={() => openJob(j)}>
+              <span className={`dot ${j.status}`} />
+              <span className="hist-text">
+                <span className="hist-brief">{j.payload?.brief || j.id.slice(0, 8)}</span>
+                <span className="hist-meta">
+                  {j.status} · {timeAgo(j.created_at)}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="side-foot">
           {stats && (
-            <>
-              <span className="stat">{stats.pending} pending</span>
-              <span className="stat">{stats.running} running</span>
-              <span className="stat ok">{stats.succeeded} succeeded</span>
-              <span className="stat fail">{stats.failed} failed</span>
-            </>
+            <span className="foot-stat">
+              {stats.succeeded} built · {stats.failed} failed
+            </span>
           )}
         </div>
-      </header>
+      </aside>
 
-      <main>
-        <section className="commit">
-          <h2>Commit a build</h2>
-          <label>Brief</label>
-          <textarea
-            value={form.brief}
-            onChange={(e) => setForm({ ...form, brief: e.target.value })}
-            rows={3}
-          />
-          <div className="row">
-            <div className="field">
-              <label>Product reference</label>
-              <input
-                value={form.product}
-                onChange={(e) => setForm({ ...form, product: e.target.value })}
-              />
+      <main className="chat">
+        <div className="thread">
+          {messages.length === 0 && !thinking && (
+            <div className="welcome">
+              <h1>What are you shipping?</h1>
+              <p>
+                Describe your brief. Drift turns it into an 18-node content
+                pipeline — copy, captions, tags, poster, keyframes, narration and
+                a delivery video — and rebuilds only what changed.
+              </p>
             </div>
-            <div className="field">
-              <label>Handle</label>
-              <input
-                value={form.handle}
-                onChange={(e) => setForm({ ...form, handle: e.target.value })}
-              />
-            </div>
-          </div>
-          <button className="build" onClick={commit} disabled={busy}>
-            {busy ? 'Committing…' : 'Build'}
-          </button>
-        </section>
-
-        <section className="jobs">
-          <h2>Builds</h2>
-          {jobs.length === 0 && <p className="empty">No builds yet.</p>}
-          {jobs.map((j) => (
-            <div key={j.id} className={`job ${j.status}`}>
-              <span className="status">{j.status}</span>
-              <span className="summary">{j.result?.summary || j.error || '—'}</span>
-              <span className="id">{j.id.slice(0, 8)}</span>
-            </div>
-          ))}
-        </section>
-
-        <section className="assets">
-          <h2>Assets {assets.length > 0 && <span className="count">{assets.length}</span>}</h2>
-          {assets.length === 0 && <p className="empty">Run a build to generate assets.</p>}
-          <div className="asset-grid">
-            {sorted.map((a) => (
-              <div key={a.stable_key} className={`asset ${a.node_type.toLowerCase()}`}>
-                {a.node_type === 'IMAGE' && (
-                  <img src={`/files/${a.path}`} alt={a.stable_key} />
-                )}
-                {a.node_type === 'VIDEO' && (
-                  <video src={`/files/${a.path}`} controls muted />
-                )}
-                {a.node_type === 'AUDIO' && (
-                  <audio src={`/files/${a.path}`} controls />
-                )}
-                {(a.node_type === 'DERIVED' || a.node_type === 'SOURCE') && (
-                  <TextAsset path={a.path} />
-                )}
-                <div className="cap">
-                  <span>{a.stable_key}</span>
-                  <code>{a.output_hash.slice(0, 10)}</code>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`msg ${m.role}`}>
+              {m.role === 'user' ? (
+                <div className="bubble">{m.text}</div>
+              ) : (
+                <div className="answer">
+                  <div className="sum">{m.text}</div>
+                  {m.assets && m.assets.length > 0 && (
+                    <div className="asset-grid">
+                      {[...m.assets]
+                        .sort(
+                          (x, y) =>
+                            (MEDIA_ORDER[x.node_type] ?? 9) -
+                            (MEDIA_ORDER[y.node_type] ?? 9),
+                        )
+                        .map((a) => (
+                          <AssetCard key={a.stable_key} a={a} />
+                        ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="graph">
-          <h2>Graph — {graph?.order?.length || 0} nodes</h2>
-          {Object.entries(byType).map(([type, nodes]) => (
-            <div key={type} className="type-group">
-              <div className="type-label">{type}</div>
-              <div className="nodes">
-                {nodes.map((n) => (
-                  <div key={n.key} className="node" title={n.inputs.join(', ')}>
-                    {n.key}
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
           ))}
-        </section>
+          {thinking && (
+            <div className="msg assistant">
+              <div className="answer">
+                <div className="sum thinking">building the pipeline…</div>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="composer">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                send()
+              }
+            }}
+            rows={1}
+            placeholder="Describe your brief…"
+          />
+          <button className="send" onClick={send} disabled={busy || !input.trim()}>
+            {busy ? '…' : '↑'}
+          </button>
+        </div>
       </main>
     </div>
   )

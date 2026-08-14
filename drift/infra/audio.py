@@ -1,18 +1,20 @@
-"""Deterministic audio generation (narration).
+"""Audio generation (narration).
 
 Resolution order, highest fidelity first:
 
-  1. Kyutai TTS — a real speech model, reached over an OpenAI-compatible
-     `/v1/audio/speech` endpoint (e.g. `dwain-barnes/kyutai-tts-openai-api`).
-     Configured via `DRIFT_TTS_URL`; needs a GPU host, so it is absent on this
-     machine and we fall through.
-  2. ffmpeg `flite` — real offline TTS, if this ffmpeg build ships the filter.
-  3. A deterministic synthesized track seeded by the description.
+  1. Kyutai TTS — a real speech model over an OpenAI-compatible
+     `/v1/audio/speech` endpoint, when `DRIFT_TTS_URL` is set (needs a host).
+  2. Microsoft Edge TTS (`edge-tts`) — free, natural, no API key, reached over
+     the network. Opt-in via `DRIFT_EDGE_VOICE` (e.g. `en-US-AriaNeural`);
+     falls through when unset, offline, or the package is absent.
+  3. ffmpeg `flite` — real offline TTS, if this ffmpeg build ships the filter.
+  4. A deterministic synthesized track seeded by the description.
 
-Whatever path wins, the output is a pure function of the input text, so it is
-content-addressed like every other node. A nondeterministic provider would
-break that property, so the TTS endpoint is used only when explicitly
-configured and its result is hashed after the fact.
+The deterministic track (4) is the reproducible fallback: identical text ->
+identical bytes, so the node stays content-addressed and re-verifiable offline.
+The network voices (1, 2) are used for a natural read but are not
+byte-reproducible, so their result is hashed after the fact rather than treated
+as a pure function of the input.
 """
 
 from __future__ import annotations
@@ -20,12 +22,15 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+import tempfile
 import urllib.request
+from pathlib import Path
 
 _TTS_URL = os.environ.get("DRIFT_TTS_URL", "")
 _TTS_KEY = os.environ.get("DRIFT_TTS_KEY", "")
 _TTS_MODEL = os.environ.get("DRIFT_TTS_MODEL", "kyutai")
 _TTS_VOICE = os.environ.get("DRIFT_TTS_VOICE", "default")
+_EDGE_VOICE = os.environ.get("DRIFT_EDGE_VOICE", "")
 
 
 def _seed(text: str) -> int:
@@ -49,6 +54,29 @@ def _tts_api(text: str) -> bytes | None:
             return resp.read()
     except Exception:
         return None  # provider unreachable — fall through to the next option
+
+
+def _edge_tts(text: str) -> bytes | None:
+    if not _EDGE_VOICE:
+        return None  # opt-in: only when a voice is explicitly configured
+    try:
+        import asyncio
+
+        import edge_tts
+    except Exception:
+        return None  # package not installed
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            mp3 = Path(tmp) / "narration.mp3"
+            asyncio.run(edge_tts.Communicate(text, _EDGE_VOICE).save(str(mp3)))
+            proc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error",
+                 "-i", str(mp3), "-f", "wav", "-"],
+                capture_output=True, check=True,
+            )
+            return proc.stdout
+    except Exception:
+        return None  # no network or ffmpeg failed — fall through
 
 
 def _has_flite() -> bool:
@@ -89,6 +117,9 @@ def render_narration(description: str) -> bytes:
     api = _tts_api(description)
     if api:
         return api
+    edge = _edge_tts(description)
+    if edge:
+        return edge
     if _has_flite():
         return _flite(description)
     return _tone(description)
