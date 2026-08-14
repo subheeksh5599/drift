@@ -88,3 +88,20 @@ def test_verify_catches_manifest_tampering(tmp_path):
     ok, failures = verify(d / ".drift")
     assert not ok
     assert any("manifest_hash" in f for f in failures)
+
+
+def test_verify_picks_latest_build_not_lexicographic(tmp_path):
+    d = _write_brief(tmp_path)
+    build(d, "@creator")
+    build(d, "@newhandle")
+    ok, failures = verify(d / ".drift")  # must verify the LATEST build
+    assert ok, failures
+
+
+def test_build_regenerates_tampered_output(tmp_path):
+    d = _write_brief(tmp_path)
+    build(d, "@creator")
+    (d / "out" / "title.txt").write_text("tampered")
+    build(d, "@creator")
+    # The tampered file was re-derived, not trusted as reuse.
+    assert (d / "out" / "title.txt").read_text() == "Launch a hydration brand."
