@@ -68,3 +68,84 @@ Tamper with one generated file and `verify` catches it:
 ```
 $ echo TAMPERED > demo/content/out/tags.txt
 $ uv run python -m drift.cli verify demo/content
+verify: FAILED
+  - tags: hash mismatch (out/tags.txt)
+```
+
+Change one byte of the manifest and `verify` catches that too — the manifest is
+bound by its own SHA-256.
+
+---
+
+## How it works
+
+1. **Compile** — a template + parameters compile deterministically into an
+   immutable graph. Cycles, duplicate keys, self-edges and unknown dependencies
+   are rejected.
+2. **Fingerprint** — every node's identity is SHA-256 over a canonical (JCS /
+   RFC 8785) encoding of its recipe and its exact input hashes. Floats are
+   rejected so a hash can never depend on binary rounding.
+3. **Impact** — walking the graph in topological order, each node either passes
+   a reuse proof or is marked rebuild. A node that rebuilds advertises a
+   `pending:` placeholder, so the invalidation cascades to its descendants.
+   Reasons distinguish "my own spec changed" from "something upstream changed".
+4. **Build** — only the stale nodes regenerate. The post-build state records
+   every node's *real* fingerprint from its *real* output hash.
+5. **Verify** — a manifest binds every asset's output hash; `verify` re-reads
+   every file from disk and re-hashes it.
+
+---
+
+## Honest status
+
+| Capability | Status |
+|---|---|
+| Deterministic graph compilation | Real. Topological order, cycle/dupe/self-edge rejection. |
+| Content-addressed fingerprints | Real. JCS + SHA-256, floats rejected, tested. |
+| Reuse proof + impact engine | Real. Cascade and blast-radius scenarios tested. |
+| Build — regenerate only stale assets | Real. 2/7 on a handle edit, measured. |
+| Release manifest + `verify` | Real. Tamper and missing-file detection tested. |
+| Text generation (title, posts, captions) | Real. Deterministic template render. |
+| Hashtag extraction + platform limits | Real. Tags derived from the brief; posts truncated to per-network char limits. |
+| Binary assets (clips, thumbnails via ffmpeg) | Not built. The generator is a seam this plugs into. |
+| LLM generation (AI copy) | Not built. Same seam; env-gated, no key hardcoded. |
+| Web UI | Not built. The CLI is the product today. |
+
+---
+
+## Run it locally
+
+```bash
+uv sync --extra dev
+uv run python -m drift.cli plan demo/content      # predict, touch nothing
+uv run python -m drift.cli build demo/content     # rebuild stale assets
+uv run python -m drift.cli verify demo/content    # re-hash everything
+uv run python -m drift.cli report demo/content    # provenance receipt
+uv run pytest                                     # 22 tests
+```
+
+## Project layout
+
+```
+drift/
+  canonical.py     # JCS canonical JSON + SHA-256
+  types.py         # graph + node types
+  compiler.py      # template -> immutable graph
+  fingerprint.py   # node fingerprints + pending placeholder
+  impact.py        # reuse proof + impact engine
+  generation.py    # deterministic asset rendering
+  build.py         # build orchestration
+  manifest.py      # manifest + release verification
+  state.py         # node cache state (load/save)
+  demo_graph.py    # the creator pipeline template
+  cli.py           # plan / build / verify
+demo/
+  content/brief.txt  # the real source file the CLI hashes
+tests/
+  test_impact.py     # compiler + impact scenarios
+  test_build.py      # build round-trip + verify + tamper detection
+```
+
+## License
+
+MIT
