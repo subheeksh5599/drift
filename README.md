@@ -1,8 +1,8 @@
 # DRIFT
 
-![tests](https://img.shields.io/badge/tests-48%20passing-34d399)
+![tests](https://img.shields.io/badge/tests-44%20passing-34d399)
 ![domain](https://img.shields.io/badge/domain-pure%20Python%20·%20zero%20I%2FO-14151a)
-![media](https://img.shields.io/badge/media-Pillow%20%2B%20ffmpeg-14151a)
+![media](https://img.shields.io/badge/media-HTML%20%2B%20Chrome%20%2B%20ffmpeg-14151a)
 ![api](https://img.shields.io/badge/api-FastAPI%20%2B%20SQLite-14151a)
 ![license](https://img.shields.io/badge/license-MIT-34d399.svg)
 
@@ -66,10 +66,11 @@ uv run python -m drift.cli build demo/content --handle @newhandle  # 2 rebuild /
 uv run python -m drift.cli verify demo/content    # OK — every asset re-hashes
 ```
 
-`demo/content/out/` contains real generated media: `image.poster.png`
-(Pillow), `transform.cutout.png` (Pillow), three `image.keyframe.*.png`
-(Pillow), `audio.narration.wav` (ffmpeg — the `flite` TTS filter when this
-build has it, otherwise a deterministic synthesized track), and
+`demo/content/out/` contains real generated media: `image.poster.png`,
+`transform.cutout.png`, three `image.keyframe.*.png` (each authored as HTML/CSS
+and rendered by headless Chrome), `audio.narration.wav` (ffmpeg — the `flite`
+TTS filter when this build has it, otherwise a deterministic synthesized
+track, or a Kyutai TTS endpoint when `DRIFT_TTS_URL` is set), and
 `compose.delivery.mp4` (ffmpeg, the keyframes + narration muxed). No model
 call and no randomness — every byte is a pure function of the source, which is
 exactly why it can be content-addressed and re-verified.
@@ -90,7 +91,7 @@ verify: FAILED
 | Layer | What it is |
 |---|---|
 | `drift/` (domain) | Pure Python graph engine — compiler, JCS+SHA-256 fingerprinting, reuse proof, impact. Zero I/O, stdlib only. |
-| `drift/infra/` | Deterministic media generation — Pillow (images) and ffmpeg (audio, video). |
+| `drift/infra/` | Deterministic media generation — images as HTML+headless Chrome, audio/video via ffmpeg. |
 | `drift/api/` | FastAPI control plane + a SQLite durable queue (atomic claim, lease + heartbeat, idempotent submit, retry). |
 | `drift/api/worker.py` | The worker process — leases a job, runs the engine, heartbeats, completes. |
 | `apps/web/` | Vite + React dashboard — commit a build, watch the queue, inspect the assets. |
@@ -140,7 +141,7 @@ build flow through the queue.
 | Content-addressed fingerprints | Real. JCS + SHA-256, floats rejected. |
 | Reuse proof + impact engine | Real. Cascade + blast-radius tested. |
 | Text generation | Real. Deterministic template/first-line/hashtag/shot-plan recipes. |
-| Image generation | Real. Poster, cutout, keyframes via Pillow — deterministic, no model. |
+| Image generation | Real. Poster, cutout, keyframes as HTML/CSS rendered by headless Chrome — deterministic, no model. |
 | Audio generation | Real. Narration via ffmpeg (`flite` TTS when present, else a synthesized track). |
 | Video generation | Real. Delivery mp4 via ffmpeg (keyframes + narration muxed). |
 | Release manifest + verify | Real. Tamper + missing-file + manifest-tamper detection tested. |
@@ -164,12 +165,12 @@ drift/
   build.py          # build orchestration (text + media)
   manifest.py       # manifest + release verification
   state.py          # node cache state
-  infra/            # images.py (Pillow), audio.py, video.py (ffmpeg), render.py
+  infra/            # images.py (HTML + Chrome), audio.py, video.py (ffmpeg), render.py
   api/              # queue.py (SQLite durable queue), storage.py, main.py, worker.py
   cli.py            # plan / build / verify / report
 apps/web/           # Vite + React dashboard
 demo/content/       # brief.txt + product.txt (the real sources)
-tests/              # 48 tests across impact, build, orbit, generation, queue, cli
+tests/              # 44 tests across impact, build, orbit, generation, queue, cli
 ```
 
 ## License
