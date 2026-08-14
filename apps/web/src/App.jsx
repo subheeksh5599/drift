@@ -17,6 +17,13 @@ function timeAgo(v) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
+function friendlySummary(s) {
+  if (!s) return 'Build finished'
+  const m = s.match(/(\d+) rebuild \/ (\d+) reuse/)
+  if (m) return `${m[1]} assets rebuilt · ${m[2]} reused`
+  return s
+}
+
 function TextAsset({ path }) {
   const [text, setText] = useState('')
   useEffect(() => {
@@ -32,7 +39,6 @@ function AssetCard({ a }) {
   return (
     <div className={`asset ${a.node_type.toLowerCase()}`}>
       {a.node_type === 'IMAGE' && <img src={`/files/${a.path}`} alt={a.stable_key} />}
-      {a.node_type === 'VIDEO' && <video src={`/files/${a.path}`} controls muted />}
       {a.node_type === 'AUDIO' && <audio src={`/files/${a.path}`} controls />}
       {(a.node_type === 'DERIVED' || a.node_type === 'SOURCE') && (
         <TextAsset path={a.path} />
@@ -41,6 +47,35 @@ function AssetCard({ a }) {
         <span>{a.stable_key}</span>
         <code>{a.output_hash.slice(0, 8)}</code>
       </div>
+    </div>
+  )
+}
+
+function Answer({ msg }) {
+  const video = msg.assets?.find((a) => a.node_type === 'VIDEO')
+  const rest = (msg.assets || []).filter((a) => a.node_type !== 'VIDEO')
+  const sorted = [...rest].sort(
+    (x, y) => (MEDIA_ORDER[x.node_type] ?? 9) - (MEDIA_ORDER[y.node_type] ?? 9),
+  )
+  return (
+    <div className="answer">
+      {video && (
+        <div className="hero">
+          <video src={`/files/${video.path}`} controls autoPlay muted loop playsInline />
+          <div className="hero-cap">Delivery ready</div>
+        </div>
+      )}
+      <div className="sum">{friendlySummary(msg.text)}</div>
+      {sorted.length > 0 && (
+        <details className="more">
+          <summary>All assets ({msg.assets.length})</summary>
+          <div className="asset-grid">
+            {sorted.map((a) => (
+              <AssetCard key={a.stable_key} a={a} />
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -130,7 +165,7 @@ export default function App() {
       (job.status === 'running' ? 'building…' : job.status)
     setMessages([
       { role: 'user', text: job.payload?.brief || '(no brief)' },
-      { role: 'assistant', text, result: job.result },
+      { role: 'assistant', text },
     ])
   }
 
@@ -150,7 +185,9 @@ export default function App() {
             <button key={j.id} className="hist-item" onClick={() => openJob(j)}>
               <span className={`dot ${j.status}`} />
               <span className="hist-text">
-                <span className="hist-brief">{j.payload?.brief || j.id.slice(0, 8)}</span>
+                <span className="hist-brief">
+                  {j.payload?.brief || '(untitled brief)'}
+                </span>
                 <span className="hist-meta">
                   {j.status} · {timeAgo(j.created_at)}
                 </span>
@@ -184,29 +221,16 @@ export default function App() {
               {m.role === 'user' ? (
                 <div className="bubble">{m.text}</div>
               ) : (
-                <div className="answer">
-                  <div className="sum">{m.text}</div>
-                  {m.assets && m.assets.length > 0 && (
-                    <div className="asset-grid">
-                      {[...m.assets]
-                        .sort(
-                          (x, y) =>
-                            (MEDIA_ORDER[x.node_type] ?? 9) -
-                            (MEDIA_ORDER[y.node_type] ?? 9),
-                        )
-                        .map((a) => (
-                          <AssetCard key={a.stable_key} a={a} />
-                        ))}
-                    </div>
-                  )}
-                </div>
+                <Answer msg={m} />
               )}
             </div>
           ))}
           {thinking && (
             <div className="msg assistant">
               <div className="answer">
-                <div className="sum thinking">building the pipeline…</div>
+                <div className="sum thinking">
+                  Generating your video<span className="dots" />
+                </div>
               </div>
             </div>
           )}
