@@ -55,6 +55,13 @@ def render_node(node: CompiledNode, inputs: dict[str, str]) -> str:
         limit = int(node.operation.get("limit", 5))
         rendered = _extract_hashtags(by_slot.get(src, ""), limit)
 
+    elif recipe == "shot_plan":
+        src = node.operation.get("input")
+        if src is None:
+            raise GenerationError(f"node {node.stable_key!r} shot_plan recipe needs an 'input'")
+        shots = int(node.operation.get("shots", 3))
+        rendered = _shot_plan(by_slot.get(src, ""), shots)
+
     elif recipe == "template":
         template = node.operation.get("template", "")
         context = dict(by_slot)
@@ -91,6 +98,18 @@ def _extract_hashtags(text: str, limit: int) -> str:
         if len(tags) >= limit:
             break
     return " ".join(tags)
+
+
+def _shot_plan(brief: str, shots: int) -> str:
+    """Deterministic shot plan: distribute the brief's words across N shots.
+
+    Real (not an LLM call) and stable: the same brief always yields the same
+    plan, so a shot-plan edit cascades through keyframes and the delivery.
+    """
+    words = [w for w in brief.split() if w]
+    if not words:
+        return "No shots."
+    return "\n".join(f"Shot {i + 1}: {' '.join(words[i::shots])}" for i in range(shots))
 
 
 def _substitute(template: str, context: dict[str, str]) -> str:

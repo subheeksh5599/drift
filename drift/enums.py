@@ -6,12 +6,33 @@ from enum import StrEnum
 
 
 class NodeType(StrEnum):
-    SOURCE = "SOURCE"      # a real uploaded asset (video, image, post text)
-    DERIVED = "DERIVED"    # an asset generated from upstream assets
+    SOURCE = "SOURCE"      # a real uploaded asset (brief, product reference)
+    DERIVED = "DERIVED"    # text derived from upstream nodes
+    IMAGE = "IMAGE"        # a generated image (poster, cutout, keyframe)
+    AUDIO = "AUDIO"        # a generated audio track (narration)
+    VIDEO = "VIDEO"        # a generated video (delivery package)
 
     @property
     def is_source(self) -> bool:
         return self is NodeType.SOURCE
+
+    @property
+    def is_media(self) -> bool:
+        return self in (NodeType.IMAGE, NodeType.AUDIO, NodeType.VIDEO)
+
+
+#: The file extension a generated node of each type is written under.
+OUTPUT_EXTENSION = {
+    NodeType.SOURCE: ".txt",
+    NodeType.DERIVED: ".txt",
+    NodeType.IMAGE: ".png",
+    NodeType.AUDIO: ".wav",
+    NodeType.VIDEO: ".mp4",
+}
+
+
+def output_extension(node_type: NodeType) -> str:
+    return OUTPUT_EXTENSION[node_type]
 
 
 class ImpactDecision(StrEnum):
