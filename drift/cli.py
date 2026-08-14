@@ -109,6 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except UnicodeDecodeError:
+        print("error: source file is not valid UTF-8 text", file=sys.stderr)
+        return 1
     except (GenerationError, GraphCompilationError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
