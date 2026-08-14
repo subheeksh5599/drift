@@ -202,7 +202,7 @@ export default function App() {
     const assets = await fetch(API('/assets')).then((r) => r.json())
     setMessages([
       { role: 'user', text: job.payload?.brief || '(no brief)' },
-      { role: 'assistant', text, assets },
+      { role: 'assistant', text, result: job.result, assets },
     ])
   }
 
