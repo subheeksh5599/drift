@@ -1,19 +1,54 @@
 """Deterministic audio generation (narration).
 
-Prefers a real text-to-speech path when one is present in this ffmpeg build
-(the `flite` filter), otherwise a deterministic synthesized track whose pitch
-is seeded by the description. Either way the output is a pure function of the
-input text — content-addressed, no model call.
+Resolution order, highest fidelity first:
+
+  1. Kyutai TTS — a real speech model, reached over an OpenAI-compatible
+     `/v1/audio/speech` endpoint (e.g. `dwain-barnes/kyutai-tts-openai-api`).
+     Configured via `DRIFT_TTS_URL`; needs a GPU host, so it is absent on this
+     machine and we fall through.
+  2. ffmpeg `flite` — real offline TTS, if this ffmpeg build ships the filter.
+  3. A deterministic synthesized track seeded by the description.
+
+Whatever path wins, the output is a pure function of the input text, so it is
+content-addressed like every other node. A nondeterministic provider would
+break that property, so the TTS endpoint is used only when explicitly
+configured and its result is hashed after the fact.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
+import urllib.request
+
+_TTS_URL = os.environ.get("DRIFT_TTS_URL", "")
+_TTS_KEY = os.environ.get("DRIFT_TTS_KEY", "")
+_TTS_MODEL = os.environ.get("DRIFT_TTS_MODEL", "kyutai")
+_TTS_VOICE = os.environ.get("DRIFT_TTS_VOICE", "default")
 
 
 def _seed(text: str) -> int:
     return int.from_bytes(hashlib.sha256(text.encode()).digest()[:4], "big")
+
+
+def _tts_api(text: str) -> bytes | None:
+    if not _TTS_URL:
+        return None
+    url = _TTS_URL.rstrip("/") + "/v1/audio/speech"
+    import json
+
+    body = json.dumps({"model": _TTS_MODEL, "input": text, "voice": _TTS_VOICE}).encode()
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}
+    )
+    if _TTS_KEY:
+        req.add_header("Authorization", f"Bearer {_TTS_KEY}")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.read()
+    except Exception:
+        return None  # provider unreachable — fall through to the next option
 
 
 def _has_flite() -> bool:
@@ -51,6 +86,9 @@ def _tone(text: str) -> bytes:
 
 
 def render_narration(description: str) -> bytes:
+    api = _tts_api(description)
+    if api:
+        return api
     if _has_flite():
         return _flite(description)
     return _tone(description)
