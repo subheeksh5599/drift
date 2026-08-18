@@ -19,7 +19,7 @@ Every title, caption, tag, post, poster, keyframe, narration and delivery video 
 
 **[ Live demo ↗ ](https://drift-pipeline.vercel.app/)** · **[ Landing ↗ ](https://drift-build.vercel.app)** · **[ Repo ↗ ](https://github.com/subheeksh5599/drift)** · **[ Architecture ↓ ](#architecture)** · **[ Media (free, no API key) ↓ ](#media-generation--free-no-api-key)** · **[ Run it locally ↓ ](#run-it-locally)**
 
-Built for the **Social Media Automation Hackathon**. MIT licensed.
+        MIT licensed.
 
 </div>
 
