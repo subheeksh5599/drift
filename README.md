@@ -336,4 +336,4 @@ drift/
 
 ## License
 
-MIT — built for the Social Media Automation Hackathon, August 2026.
+MIT, August 2026.
